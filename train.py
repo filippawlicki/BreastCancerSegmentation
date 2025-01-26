@@ -9,14 +9,84 @@ from utils.dataset import BreastUltrasoundDataset, split_dataset
 from models.unet_model import UNet
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+import numpy as np
+
+def compute_metrics(preds, labels):
+    """
+    Computes image segmentation metrics.
+
+    Args:
+        preds (tensor): Predicted mask (logits).
+        labels (tensor): Ground truth mask (binary).
+
+    Returns:
+        dict: A dictionary containing the computed metrics.
+    """
+    # Flatten tensors
+    preds_flat = preds.view(-1)
+    labels_flat = labels.view(-1)
+
+    # Convert logits to probabilities using sigmoid
+    preds_flat = torch.sigmoid(preds_flat)
+
+    # Convert labels to binary (0 or 1)
+    labels_flat = (labels_flat > 0.5).float()  # This ensures binary labels (0 or 1)
+
+    # Compute Dice Score
+    intersection = (preds_flat * labels_flat).sum()
+    dice_score = (2. * intersection + 1e-6) / (preds_flat.sum() + labels_flat.sum() + 1e-6)
+
+    # Compute IoU Score
+    iou = intersection / (preds_flat.sum() + labels_flat.sum() - intersection + 1e-6)
+
+    # Compute Recall (Sensitivity)
+    recall = intersection / (labels_flat.sum() + 1e-6)
+
+    # Compute Precision
+    precision = intersection / (preds_flat.sum() + 1e-6)
+
+    # Compute Global Accuracy (check if each pixel is equal, then average over the entire mask)
+    global_accuracy = (preds_flat == labels_flat).float().mean().item()
+
+    # Compute AUC-ROC Score (requires probabilities)
+    auc_roc = roc_auc_score(labels_flat.cpu().numpy(), preds_flat.cpu().numpy())
+
+    metrics = {
+        "dice_score": dice_score.item(),
+        "iou_score": iou.item(),
+        "recall": recall.item(),
+        "precision": precision.item(),
+        "global_accuracy": global_accuracy,
+        "auc_roc": auc_roc
+    }
+
+    return metrics
+
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, output_dir):
     """
     Train the model with progress tracking for each epoch and additional metrics logging.
     """
-    metrics = {"train_loss": [], "val_loss": []}
-    best_loss = float("inf")
+    metrics = {
+        "train_loss": [],
+        "val_loss": [],
+        "train_dice_score": [],
+        "val_dice_score": [],
+        "train_iou_score": [],
+        "val_iou_score": [],
+        "train_recall": [],
+        "val_recall": [],
+        "train_precision": [],
+        "val_precision": [],
+        "train_global_accuracy": [],
+        "val_global_accuracy": [],
+        "train_auc_roc": [],
+        "val_auc_roc": [],
+        "best_metric": []
+    }
+    best_metric = -float("inf")
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch + 1}/{num_epochs}")
@@ -30,6 +100,14 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
 
             running_loss = 0.0
             total_samples = 0
+            epoch_metrics = {
+                "dice_score": 0,
+                "iou_score": 0,
+                "recall": 0,
+                "precision": 0,
+                "global_accuracy": 0,
+                "auc_roc": 0
+            }
 
             # Add a progress bar for this phase
             progress_bar = tqdm(dataloaders[phase], desc=f"{phase.capitalize()} Progress", unit="batch", mininterval=1)
@@ -50,6 +128,14 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
                 running_loss += loss.item() * inputs.size(0)
                 total_samples += inputs.size(0)
 
+                # Convert output to binary (since it's a segmentation problem)
+                preds = torch.sigmoid(outputs) > 0.5  # Convert to binary mask
+
+                # Compute metrics
+                batch_metrics = compute_metrics(preds, masks)
+                for key, value in batch_metrics.items():
+                    epoch_metrics[key] += value
+
                 # Optionally update progress bar with current loss
                 progress_bar.set_postfix(loss=loss.item())
 
@@ -58,12 +144,16 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
 
             # Log metrics
             metrics[f"{phase}_loss"].append(epoch_loss)
+            for key, value in epoch_metrics.items():
+                epoch_metrics[key] /= len(dataloaders[phase])  # Average over the batch
+                print(f"{phase.capitalize()} {key.capitalize()}: {epoch_metrics[key]:.4f}")
+                metrics[f"{phase}_{key}"].append(epoch_metrics[key])
 
-            # Save best model
-            if phase == "val" and epoch_loss < best_loss:
-                best_loss = epoch_loss
+            # Save best model based on Dice Score (or any other metric)
+            if phase == "val" and epoch_metrics["dice_score"] > best_metric:
+                best_metric = epoch_metrics["dice_score"]
                 torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
-                print(f"\nBest model saved with loss: {best_loss:.4f}")
+                print(f"\nBest model saved with Dice Score: {best_metric:.4f}")
 
         print()
 
@@ -75,6 +165,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
     plot_metrics(metrics, output_dir)
 
     return model
+
 
 def plot_metrics(metrics, output_dir):
     """
@@ -89,6 +180,18 @@ def plot_metrics(metrics, output_dir):
     plt.legend()
     plt.grid()
     plt.savefig(os.path.join(output_dir, "loss_graph.png"))
+    plt.close()
+
+    # Plot the segmentation metrics
+    plt.figure(figsize=(10, 6))
+    plt.plot(metrics["train_dice_score"], label="Train Dice Score")
+    plt.plot(metrics["val_dice_score"], label="Validation Dice Score")
+    plt.xlabel("Epoch")
+    plt.ylabel("Dice Score")
+    plt.title("Dice Score")
+    plt.legend()
+    plt.grid()
+    plt.savefig(os.path.join(output_dir, "dice_score_graph.png"))
     plt.close()
 
 def log_training_details(output_dir, params):
