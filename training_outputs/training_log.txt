@@ -1,0 +1,6 @@
+Dataset Path: ./dataset
+Output Directory: ./training_outputs
+Number of Epochs: 25
+Batch Size: 32
+Learning Rate: 0.0001
+Device: mps
