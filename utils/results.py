@@ -23,32 +23,37 @@ test_dataset = BreastUltrasoundDataset(
 )
 test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
+# Create a subdirectory for saving the images
+output_images_dir = './predictions_output'
+os.makedirs(output_images_dir, exist_ok=True)
+
 # Select 5 random samples from the dataset
 random_indices = random.sample(range(len(test_dataset)), 5)
 
-# Function to display images
-def show_images(inputs, preds, masks, idx):
-    plt.figure(figsize=(15, 5))
+# Function to save images on a single plot
+def save_images(inputs, preds, masks, idx, output_dir):
+    # Create a single plot with 3 subplots
+    fig, axs = plt.subplots(1, 3, figsize=(15, 6))
 
-    # Display Input Image
-    plt.subplot(1, 3, 1)
-    plt.imshow(inputs[idx].cpu().numpy().transpose(1, 2, 0))
-    plt.title("Input Image")
-    plt.axis("off")
+    # Input image
+    axs[0].imshow(inputs.squeeze().cpu().numpy().transpose(1, 2, 0))
+    axs[0].set_title("Input Image")
+    axs[0].axis("off")
 
-    # Display Prediction Mask
-    plt.subplot(1, 3, 2)
-    plt.imshow(preds[idx].cpu().numpy().squeeze(), cmap="gray")
-    plt.title("Predicted Mask")
-    plt.axis("off")
+    # Predicted mask
+    axs[1].imshow(preds.squeeze().cpu().numpy(), cmap="gray")
+    axs[1].set_title("Predicted Mask")
+    axs[1].axis("off")
 
-    # Display Ground Truth Mask
-    plt.subplot(1, 3, 3)
-    plt.imshow(masks[idx].cpu().numpy().squeeze(), cmap="gray")
-    plt.title("Ground Truth Mask")
-    plt.axis("off")
+    # Ground truth mask
+    axs[2].imshow(masks.squeeze().cpu().numpy(), cmap="gray")
+    axs[2].set_title("Ground Truth Mask")
+    axs[2].axis("off")
 
-    plt.show()
+    # Save the plot as an image
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, f"sample_{idx}.png"))
+    plt.close()
 
 # Test the model on 5 random samples
 for idx in random_indices:
@@ -62,5 +67,7 @@ for idx in random_indices:
         outputs = model(inputs)
         preds = torch.sigmoid(outputs) > 0.5  # Apply threshold to get binary mask
 
-    # Display the images and masks
-    show_images(inputs, preds, masks, 0)
+    # Save the images in one plot
+    save_images(inputs, preds, masks, idx, output_images_dir)
+
+print(f"Images saved in {output_images_dir}")
