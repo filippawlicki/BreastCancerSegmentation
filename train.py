@@ -12,6 +12,10 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 import numpy as np
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 def compute_metrics(preds, labels):
     """
     Computes image segmentation metrics.
@@ -47,7 +51,8 @@ def compute_metrics(preds, labels):
     precision = intersection / (preds_flat.sum() + 1e-6)
 
     # Compute Global Accuracy (check if each pixel is equal, then average over the entire mask)
-    global_accuracy = (preds_flat == labels_flat).float().mean().item()
+    binary_preds_flat = preds_flat > 0.5
+    global_accuracy = (binary_preds_flat == labels_flat).float().mean().item()
 
     # Compute AUC-ROC Score (requires probabilities)
     auc_roc = roc_auc_score(labels_flat.cpu().numpy(), preds_flat.cpu().numpy())
@@ -140,10 +145,11 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
                 progress_bar.set_postfix(loss=loss.item())
 
             epoch_loss = running_loss / total_samples
-            print(f"{phase.capitalize()} Loss: {epoch_loss:.4f}")
+            print(f"\n{phase.capitalize()} Loss: {epoch_loss:.4f}")
 
             # Log metrics
             metrics[f"{phase}_loss"].append(epoch_loss)
+            print("\n")
             for key, value in epoch_metrics.items():
                 epoch_metrics[key] /= len(dataloaders[phase])  # Average over the batch
                 print(f"{phase.capitalize()} {key.capitalize()}: {epoch_metrics[key]:.4f}")
@@ -208,7 +214,7 @@ if __name__ == "__main__":
     output_dir = "./training_outputs"  # Output directory for saving models and metrics
     os.makedirs(output_dir, exist_ok=True)
 
-    num_epochs = 25
+    num_epochs = 100
     batch_size = 32
     learning_rate = 1e-4
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
@@ -230,7 +236,7 @@ if __name__ == "__main__":
     }
 
     # Initialize model, loss, and optimizer
-    model = UNet(in_channels=3, out_channels=1).to(device)  # Assuming RGB images
+    model = UNet(in_channels=1, out_channels=1).to(device)  # Assuming RGB images
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 

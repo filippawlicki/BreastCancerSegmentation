@@ -30,7 +30,7 @@ class BreastUltrasoundDataset(Dataset):
         mask_paths = self.mask_paths[idx]
 
         # Load image
-        image = Image.open(img_path).convert("RGB")
+        image = Image.open(img_path).convert("L")
 
         # Combine multiple masks
         masks = [Image.open(mask_path).convert("L") for mask_path in mask_paths]

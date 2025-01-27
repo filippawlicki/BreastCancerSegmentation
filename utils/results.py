@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 # Load the trained model
 device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-model = UNet(in_channels=3, out_channels=1).to(device)
+model = UNet(in_channels=1, out_channels=1).to(device)
 model.load_state_dict(torch.load("../training_outputs/final_model.pth"))
 model.eval()
 
@@ -27,16 +27,13 @@ test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 output_images_dir = './predictions_output'
 os.makedirs(output_images_dir, exist_ok=True)
 
-# Select 5 random samples from the dataset
-random_indices = random.sample(range(len(test_dataset)), 5)
-
 # Function to save images on a single plot
 def save_images(inputs, preds, masks, idx, output_dir):
     # Create a single plot with 3 subplots
     fig, axs = plt.subplots(1, 3, figsize=(15, 6))
 
     # Input image
-    axs[0].imshow(inputs.squeeze().cpu().numpy().transpose(1, 2, 0))
+    axs[0].imshow(inputs.squeeze().cpu().numpy(), cmap="gray")
     axs[0].set_title("Input Image")
     axs[0].axis("off")
 
@@ -56,11 +53,14 @@ def save_images(inputs, preds, masks, idx, output_dir):
     plt.close()
 
 # Test the model on 5 random samples
-for idx in random_indices:
+for inputs, masks in test_dataset:
     # Get the image and its ground truth mask
-    inputs, masks = test_dataset[idx]
+    #inputs, masks = test_dataset[idx]
     inputs = inputs.unsqueeze(0).to(device)  # Add batch dimension
     masks = masks.unsqueeze(0).to(device)  # Add batch dimension
+
+    # Get the index of the sample
+    idx = random.randint(0, len(test_dataset) - 1)
 
     # Make a prediction
     with torch.no_grad():
