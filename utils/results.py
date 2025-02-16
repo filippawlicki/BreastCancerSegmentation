@@ -24,7 +24,7 @@ test_dataset = BreastUltrasoundDataset(
 test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 # Create a subdirectory for saving the images
-output_images_dir = './predictions_output'
+output_images_dir = '../predictions_output'
 os.makedirs(output_images_dir, exist_ok=True)
 
 # Function to save images on a single plot

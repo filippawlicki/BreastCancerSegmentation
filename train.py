@@ -43,14 +43,18 @@ def compute_metrics(preds, labels):
     binary_preds_flat = binary_preds_flat.to(device)
     labels_flat = labels_flat.to(device)
 
+    smooth = 1e-6
+
     # Compute metrics
-    dice_score = 2.0 * torch.sum(binary_preds_flat * labels_flat) / (torch.sum(binary_preds_flat) + torch.sum(labels_flat))
-    iou_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum((binary_preds_flat + labels_flat) >= 1)
-    recall_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum(labels_flat)
-    precision_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum(binary_preds_flat)
-    global_accuracy = torch.sum(binary_preds_flat == labels_flat) / binary_preds_flat.numel()
+    dice_score = 2.0 * torch.sum(binary_preds_flat * labels_flat) / (torch.sum(binary_preds_flat) + torch.sum(labels_flat) + smooth)
+    iou_score = torch.sum(binary_preds_flat * labels_flat) / (torch.sum((binary_preds_flat + labels_flat) >= 1) + smooth)
+    recall_score = torch.sum(binary_preds_flat * labels_flat) / (torch.sum(labels_flat) + smooth)
+    precision_score = torch.sum(binary_preds_flat * labels_flat) / (torch.sum(binary_preds_flat) + smooth)
+    global_accuracy = torch.sum(binary_preds_flat == labels_flat) / (binary_preds_flat.numel() + smooth)
 
     auc_roc = roc_auc_score(labels_flat.cpu().detach().numpy(), preds_flat.cpu().detach().numpy())
+    if np.isnan(auc_roc): # Handle edge case when auc_roc is NaN
+        auc_roc = 0.5
 
     metrics = {
         "dice_score": dice_score.item(),
@@ -80,7 +84,8 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
         "train_auc_roc": [],
         "val_auc_roc": []
     }
-    best_metric = -float("inf")
+    best_dice_score = -float("inf")
+    best_metrics = None
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch + 1}/{num_epochs}")
@@ -142,10 +147,10 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
                 metrics[f"{phase}_{key}"].append(epoch_metrics[key])
 
             # Save best model based on Dice Score (or any other metric)
-            if phase == "val" and epoch_metrics["dice_score"] > best_metric:
-                best_metric = epoch_metrics["dice_score"]
-                torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
-                print(f"\nBest model saved with Dice Score: {best_metric:.4f}")
+            if phase == "val" and epoch_metrics["dice_score"] > best_dice_score:
+                best_dice_score = epoch_metrics["dice_score"]
+                best_metrics = epoch_metrics
+                print(f"\nBest model with Dice Score: {best_dice_score:.4f}")
 
         print()
 
@@ -153,35 +158,96 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
     with open(os.path.join(output_dir, "metrics.json"), "w") as f:
         json.dump(metrics, f, indent=4)
 
+    # Save best metrics
+    with open(os.path.join(output_dir, "best_metrics.json"), "w") as f:
+        json.dump(best_metrics, f, indent=4)
+
     # Plot and save metrics graph
     plot_metrics(metrics, output_dir)
 
     return model
 
-
 def plot_metrics(metrics, output_dir):
-    plt.figure(figsize=(10, 6))
-    plt.plot(metrics["train_loss"], label="Train Loss")
-    plt.plot(metrics["val_loss"], label="Validation Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Training and Validation Loss")
-    plt.legend()
-    plt.grid()
-    plt.savefig(os.path.join(output_dir, "loss_graph.png"))
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    axes[0].plot(metrics["train_loss"], label="Train Loss")
+    axes[0].plot(metrics["val_loss"], label="Validation Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Loss")
+    axes[0].set_title("Training & Validation Loss")
+    axes[0].legend()
+    axes[0].grid()
+
+    axes[1].plot(metrics["train_dice_score"], label="Train Dice Score")
+    axes[1].plot(metrics["val_dice_score"], label="Validation Dice Score")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylabel("Dice Score")
+    axes[1].set_title("Dice Score")
+    axes[1].legend()
+    axes[1].grid()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "loss_dice_graph.png"))
     plt.close()
 
-    # Plot the segmentation metrics
-    plt.figure(figsize=(10, 6))
-    plt.plot(metrics["train_dice_score"], label="Train Dice Score")
-    plt.plot(metrics["val_dice_score"], label="Validation Dice Score")
-    plt.xlabel("Epoch")
-    plt.ylabel("Dice Score")
-    plt.title("Dice Score")
-    plt.legend()
-    plt.grid()
-    plt.savefig(os.path.join(output_dir, "dice_score_graph.png"))
+    fig = plt.figure(figsize=(14, 12))
+    gs = fig.add_gridspec(3, 2)
+
+    ax1 = fig.add_subplot(gs[0, 0])  # IoU Score
+    ax2 = fig.add_subplot(gs[0, 1])  # Recall
+    ax3 = fig.add_subplot(gs[1, 0])  # Precision
+    ax4 = fig.add_subplot(gs[1, 1])  # Global Accuracy
+
+    ax1.plot(metrics["train_iou_score"], label="Train IoU Score")
+    ax1.plot(metrics["val_iou_score"], label="Validation IoU Score")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("IoU Score")
+    ax1.set_title("IoU Score")
+    ax1.legend()
+    ax1.grid()
+
+    ax2.plot(metrics["train_recall"], label="Train Recall")
+    ax2.plot(metrics["val_recall"], label="Validation Recall")
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Recall")
+    ax2.set_title("Recall")
+    ax2.legend()
+    ax2.grid()
+
+    ax3.plot(metrics["train_precision"], label="Train Precision")
+    ax3.plot(metrics["val_precision"], label="Validation Precision")
+    ax3.set_xlabel("Epoch")
+    ax3.set_ylabel("Precision")
+    ax3.set_title("Precision")
+    ax3.legend()
+    ax3.grid()
+
+    ax4.plot(metrics["train_global_accuracy"], label="Train Global Accuracy")
+    ax4.plot(metrics["val_global_accuracy"], label="Validation Global Accuracy")
+    ax4.set_xlabel("Epoch")
+    ax4.set_ylabel("Global Accuracy")
+    ax4.set_title("Global Accuracy")
+    ax4.legend()
+    ax4.grid()
+
+    # Last plot (AUC ROC) will span two columns in the last row
+    ax5 = fig.add_subplot(gs[2, :])  # Spanning both columns
+    ax5.plot(metrics["train_auc_roc"], label="Train AUC ROC")
+    ax5.plot(metrics["val_auc_roc"], label="Validation AUC ROC")
+    ax5.set_xlabel("Epoch")
+    ax5.set_ylabel("AUC ROC")
+    ax5.set_title("AUC ROC")
+    ax5.legend()
+    ax5.grid()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "other_metrics_graph.png"))
     plt.close()
+
+
 
 def log_training_details(output_dir, params):
     with open(os.path.join(output_dir, "training_log.txt"), "w") as f:
@@ -194,10 +260,10 @@ if __name__ == "__main__":
     output_dir = "./training_outputs"  # Output directory for saving models and metrics
     os.makedirs(output_dir, exist_ok=True)
 
-    num_epochs = 1
+    num_epochs = 20
     batch_size = 32
-    learning_rate = 1e-5
-    weight_decay = 1e-4
+    learning_rate = 1e-4
+    weight_decay = 1e-5
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
     # Dataset and DataLoader
