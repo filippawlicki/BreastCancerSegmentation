@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms as T
+
+from utils.DiceBCELoss import DiceBCELoss
 from utils.dataset import BreastUltrasoundDataset, split_dataset
 from models.unet_model import UNet
 from tqdm import tqdm
@@ -51,17 +53,15 @@ def compute_metrics(preds, labels):
     auc_roc = roc_auc_score(labels_flat.cpu().detach().numpy(), preds_flat.cpu().detach().numpy())
 
     metrics = {
-        "dice_score": dice_score,
-        "iou_score": iou_score,
-        "recall": recall_score,
-        "precision": precision_score,
-        "global_accuracy": global_accuracy,
+        "dice_score": dice_score.item(),
+        "iou_score": iou_score.item(),
+        "recall": recall_score.item(),
+        "precision": precision_score.item(),
+        "global_accuracy": global_accuracy.item(),
         "auc_roc": auc_roc
     }
 
     return metrics
-
-
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, output_dir):
     metrics = {
@@ -194,9 +194,10 @@ if __name__ == "__main__":
     output_dir = "./training_outputs"  # Output directory for saving models and metrics
     os.makedirs(output_dir, exist_ok=True)
 
-    num_epochs = 10
+    num_epochs = 1
     batch_size = 32
-    learning_rate = 1e-4
+    learning_rate = 1e-5
+    weight_decay = 1e-4
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
     # Dataset and DataLoader
@@ -217,8 +218,8 @@ if __name__ == "__main__":
 
     # Initialize model, loss, and optimizer
     model = UNet(in_channels=1, out_channels=1).to(device)
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = DiceBCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     # Log training details
     training_params = {
@@ -227,6 +228,7 @@ if __name__ == "__main__":
         "Number of Epochs": num_epochs,
         "Batch Size": batch_size,
         "Learning Rate": learning_rate,
+        "Weight Decay": weight_decay,
         "Device": device.type,
     }
     log_training_details(output_dir, training_params)
