@@ -16,7 +16,7 @@ model.eval()
 # Load the dataset and DataLoader
 root_dir = "../dataset"  # Path to your dataset
 splits = split_dataset(root_dir)
-transforms = T.Compose([T.Resize((256, 256)), T.ToTensor()])
+transforms = T.Compose([T.Resize((128, 128)), T.ToTensor()])
 
 test_dataset = BreastUltrasoundDataset(
     splits["test"][0], splits["test"][1], transform=transforms, mask_transform=transforms

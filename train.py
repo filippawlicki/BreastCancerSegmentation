@@ -9,49 +9,52 @@ from utils.dataset import BreastUltrasoundDataset, split_dataset
 from models.unet_model import UNet
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
 import numpy as np
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
+import torch
+import torch.nn.functional as F
+from sklearn.metrics import roc_auc_score
+
 def compute_metrics(preds, labels):
+    # Ensure all tensors are on the same device
+    device = preds.device
+    labels = labels.to(device)
+
     # Flatten tensors
     preds_flat = preds.view(-1)
     labels_flat = labels.view(-1)
 
-    # Convert logits to probabilities using sigmoid
+    # Convert logits to probabilities
     preds_flat = torch.sigmoid(preds_flat)
 
-    # Convert labels to binary (0 or 1)
-    labels_flat = (labels_flat > 0.5).float()  # This ensures binary labels (0 or 1)
+    # Convert labels to binary (0 or 1) and ensure integer type
+    labels_flat = (labels_flat > 0.5).int()
 
-    # Compute Dice Score
-    intersection = (preds_flat * labels_flat).sum()
-    dice_score = (2. * intersection + 1e-6) / (preds_flat.sum() + labels_flat.sum() + 1e-6)
+    # Threshold predictions to get binary masks
+    binary_preds_flat = (preds_flat > 0.5).int()
 
-    # Compute IoU Score
-    iou = intersection / (preds_flat.sum() + labels_flat.sum() - intersection + 1e-6)
+    # Move tensors to the same device (redundant but ensures correctness)
+    binary_preds_flat = binary_preds_flat.to(device)
+    labels_flat = labels_flat.to(device)
 
-    # Compute Recall (Sensitivity)
-    recall = intersection / (labels_flat.sum() + 1e-6)
+    # Compute metrics
+    dice_score = 2.0 * torch.sum(binary_preds_flat * labels_flat) / (torch.sum(binary_preds_flat) + torch.sum(labels_flat))
+    iou_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum((binary_preds_flat + labels_flat) >= 1)
+    recall_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum(labels_flat)
+    precision_score = torch.sum(binary_preds_flat * labels_flat) / torch.sum(binary_preds_flat)
+    global_accuracy = torch.sum(binary_preds_flat == labels_flat) / binary_preds_flat.numel()
 
-    # Compute Precision
-    precision = intersection / (preds_flat.sum() + 1e-6)
-
-    # Compute Global Accuracy (check if each pixel is equal, then average over the entire mask)
-    binary_preds_flat = preds_flat > 0.5
-    global_accuracy = (binary_preds_flat == labels_flat).float().mean().item()
-
-    # Compute AUC-ROC Score (requires probabilities)
-    auc_roc = roc_auc_score(labels_flat.cpu().numpy(), preds_flat.cpu().numpy())
+    auc_roc = roc_auc_score(labels_flat.cpu().detach().numpy(), preds_flat.cpu().detach().numpy())
 
     metrics = {
-        "dice_score": dice_score.item(),
-        "iou_score": iou.item(),
-        "recall": recall.item(),
-        "precision": precision.item(),
+        "dice_score": dice_score,
+        "iou_score": iou_score,
+        "recall": recall_score,
+        "precision": precision_score,
         "global_accuracy": global_accuracy,
         "auc_roc": auc_roc
     }
@@ -61,9 +64,6 @@ def compute_metrics(preds, labels):
 
 
 def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, output_dir):
-    """
-    Train the model with progress tracking for each epoch and additional metrics logging.
-    """
     metrics = {
         "train_loss": [],
         "val_loss": [],
@@ -122,11 +122,8 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
                 running_loss += loss.item() * inputs.size(0)
                 total_samples += inputs.size(0)
 
-                # Convert output to binary (since it's a segmentation problem)
-                preds = torch.sigmoid(outputs) > 0.5  # Convert to binary mask
-
                 # Compute metrics
-                batch_metrics = compute_metrics(preds, masks)
+                batch_metrics = compute_metrics(outputs, masks)
                 for key, value in batch_metrics.items():
                     epoch_metrics[key] += value
 
@@ -193,11 +190,11 @@ def log_training_details(output_dir, params):
 
 if __name__ == "__main__":
     # Paths and Hyperparameters
-    root_dir = "./dataset"  # Path to your dataset
+    root_dir = "./dataset"
     output_dir = "./training_outputs"  # Output directory for saving models and metrics
     os.makedirs(output_dir, exist_ok=True)
 
-    num_epochs = 100
+    num_epochs = 10
     batch_size = 32
     learning_rate = 1e-4
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
