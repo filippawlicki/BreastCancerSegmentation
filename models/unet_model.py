@@ -67,10 +67,3 @@ class UNet(nn.Module):
     dec1 = self.dec1(dec1)
 
     return self.final_conv(dec1)
-
-
-if __name__ == "__main__":
-  model = UNet(in_channels=1, out_channels=1)  # Adjust channels as per your utils
-  x = torch.randn(1, 1, 256, 256)  # Example input tensor
-  y = model(x)
-  print(y.shape)

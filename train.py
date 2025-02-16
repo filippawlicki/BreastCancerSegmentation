@@ -17,16 +17,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def compute_metrics(preds, labels):
-    """
-    Computes image segmentation metrics.
-
-    Args:
-        preds (tensor): Predicted mask (logits).
-        labels (tensor): Ground truth mask (binary).
-
-    Returns:
-        dict: A dictionary containing the computed metrics.
-    """
     # Flatten tensors
     preds_flat = preds.view(-1)
     labels_flat = labels.view(-1)
@@ -88,8 +78,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
         "train_global_accuracy": [],
         "val_global_accuracy": [],
         "train_auc_roc": [],
-        "val_auc_roc": [],
-        "best_metric": []
+        "val_auc_roc": []
     }
     best_metric = -float("inf")
 
@@ -174,9 +163,6 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs, device, ou
 
 
 def plot_metrics(metrics, output_dir):
-    """
-    Plot and save training and validation loss graphs.
-    """
     plt.figure(figsize=(10, 6))
     plt.plot(metrics["train_loss"], label="Train Loss")
     plt.plot(metrics["val_loss"], label="Validation Loss")
@@ -201,9 +187,6 @@ def plot_metrics(metrics, output_dir):
     plt.close()
 
 def log_training_details(output_dir, params):
-    """
-    Save training metadata to a log file.
-    """
     with open(os.path.join(output_dir, "training_log.txt"), "w") as f:
         for key, value in params.items():
             f.write(f"{key}: {value}\n")
@@ -221,7 +204,7 @@ if __name__ == "__main__":
 
     # Dataset and DataLoader
     splits = split_dataset(root_dir)
-    transforms = T.Compose([T.Resize((256, 256)), T.ToTensor()])
+    transforms = T.Compose([T.Resize((128, 128)), T.ToTensor()])
 
     train_dataset = BreastUltrasoundDataset(
         splits["train"][0], splits["train"][1], transform=transforms, mask_transform=transforms
@@ -236,7 +219,7 @@ if __name__ == "__main__":
     }
 
     # Initialize model, loss, and optimizer
-    model = UNet(in_channels=1, out_channels=1).to(device)  # Assuming RGB images
+    model = UNet(in_channels=1, out_channels=1).to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 

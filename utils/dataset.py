@@ -10,13 +10,6 @@ from torchvision.transforms.functional import to_tensor, to_pil_image
 
 class BreastUltrasoundDataset(Dataset):
     def __init__(self, image_paths, mask_paths, transform=None, mask_transform=None):
-        """
-        Args:
-            image_paths (list): List of image file paths.
-            mask_paths (list): List of corresponding mask file paths (lists of lists for multiple masks).
-            transform (callable, optional): Transformations for the input images.
-            mask_transform (callable, optional): Transformations for the masks.
-        """
         self.image_paths = image_paths
         self.mask_paths = mask_paths
         self.transform = transform
@@ -45,7 +38,6 @@ class BreastUltrasoundDataset(Dataset):
         # Clamp combined_mask values to [0, 1] (in case of overlaps)
         combined_mask = combined_mask.clamp(0, 1)
 
-        # Convert combined_mask back to PIL.Image if needed
         combined_mask = to_pil_image(combined_mask)
 
         # Apply transformations
@@ -57,18 +49,6 @@ class BreastUltrasoundDataset(Dataset):
         return image, combined_mask
 
 def split_dataset(root_dir, val_size=0.2, test_size=0.1, random_seed=42):
-    """
-    Splits the dataset into training, validation, and test sets.
-
-    Args:
-        root_dir (str): Path to the dataset directory.
-        val_size (float): Proportion of data to use for validation.
-        test_size (float): Proportion of data to use for testing.
-        random_seed (int): Seed for reproducibility.
-
-    Returns:
-        dict: A dictionary with keys 'train', 'val', 'test', each containing a tuple of image and mask paths.
-    """
     random.seed(random_seed)
     all_images = []
     all_masks = []
@@ -97,15 +77,3 @@ def split_dataset(root_dir, val_size=0.2, test_size=0.1, random_seed=42):
         "val": (val_images, val_masks),
         "test": (test_images, test_masks),
     }
-
-# Example usage
-if __name__ == "__main__":
-    root_dir = "path/to/dataset"
-    splits = split_dataset(root_dir)
-
-    train_dataset = BreastUltrasoundDataset(
-        splits["train"][0], splits["train"][1],
-        transform=T.Compose([T.Resize((256, 256)), T.ToTensor()]),
-        mask_transform=T.Compose([T.Resize((256, 256)), T.ToTensor()])
-    )
-    print(f"Training samples: {len(train_dataset)}")
