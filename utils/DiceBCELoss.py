@@ -4,7 +4,7 @@ import torch.nn as nn
 class DiceBCELoss(nn.Module):
   def __init__(self):
     super(DiceBCELoss, self).__init__()
-    self.bce = nn.BCEWithLogitsLoss()
+    self.bce = nn.BCELoss()
 
   def forward(self, preds, targets):
     preds = torch.sigmoid(preds)  # Apply sigmoid

@@ -52,6 +52,8 @@ def save_images(inputs, preds, masks, idx, output_dir):
     plt.savefig(os.path.join(output_dir, f"sample_{idx}.png"))
     plt.close()
 
+dice_score = 0
+
 # Test the model on 5 random samples
 for inputs, masks in test_dataset:
     # Get the image and its ground truth mask
@@ -67,7 +69,15 @@ for inputs, masks in test_dataset:
         outputs = model(inputs)
         preds = torch.sigmoid(outputs) > 0.5  # Apply threshold to get binary mask
 
+    # Calculate the Dice score
+    intersection = torch.logical_and(preds.squeeze(), masks.squeeze()).sum()
+    union = preds.sum() + masks.sum()
+    dice = (2.0 * intersection) / (union + 1e-7)
+    dice_score += dice.item()
+
     # Save the images in one plot
     save_images(inputs, preds, masks, idx, output_images_dir)
 
+
+print(f"Average Dice Score: {dice_score / len(test_dataset)}")
 print(f"Images saved in {output_images_dir}")

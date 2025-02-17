@@ -1,7 +1,7 @@
 Dataset Path: ./dataset
 Output Directory: ./training_outputs
-Number of Epochs: 20
-Batch Size: 32
+Number of Epochs: 100
+Batch Size: 16
 Learning Rate: 0.0001
-Weight Decay: 1e-05
+Weight Decay: 1e-06
 Device: mps
