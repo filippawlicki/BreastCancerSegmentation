@@ -65,6 +65,7 @@ Below are some example predictions made by the trained U-Net model. The images i
 
 ### 🔹 Model Performance Metrics  
 Here are the performance metrics that evaluate the model's segmentation capabilities, including **Dice Score**, **IoU**, **Accuracy**, **Precision**, **Recall** and **AUC ROC**.
+The model was trained only for 10 epochs because of the small dataset. The model achieved a **Dice Score** of **0.7** on the test dataset.
 
 ![Loss and dice score plot](./loss_dice_graph.png)  
 
