@@ -260,7 +260,7 @@ if __name__ == "__main__":
     output_dir = "./training_outputs"  # Output directory for saving models and metrics
     os.makedirs(output_dir, exist_ok=True)
 
-    num_epochs = 100
+    num_epochs = 10
     batch_size = 16
     learning_rate = 1e-4
     weight_decay = 1e-6
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     # Initialize model, loss, and optimizer
     model = UNet(in_channels=1, out_channels=1).to(device)
     criterion = DiceBCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     # Log training details
     training_params = {

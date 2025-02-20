@@ -1,1 +1,3 @@
 training_outputs/*.pth
+dataset/
+predictions_output/
