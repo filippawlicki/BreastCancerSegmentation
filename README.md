@@ -19,7 +19,8 @@ pip install -r requirements.txt
 ```
 
 ### 🔹 3. Train the Model  
-Before training the model, you need to download the dataset. Instructions for downloading and preparing the dataset can be found in the [**Dataset**](#📂-dataset) section of the README.
+Before training the model, you need to download the dataset. Instructions for downloading and preparing the dataset can be found in the [**Dataset**](#dataset)
+ section of the README.
 
 To train the U-Net model on the dataset, run:  
 ```bash
