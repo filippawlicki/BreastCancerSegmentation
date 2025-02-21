@@ -37,7 +37,7 @@ The trained model will be saved in the `training_outputs/` directory.
 ### 🔹 4. Test the Model & Visualize Predictions  
 After training, evaluate the model on unseen test data by running:  
 ```bash
-python test.py
+python utils/test.py
 ```
 This script will:  
 - Load the trained U-Net model  
